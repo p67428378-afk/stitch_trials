@@ -1,63 +1,42 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from app.models import User
 
-from backend.app.main import app
-from backend.app.database import Base, get_db
-
-# Setup for in-memory SQLite database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={
-        "check_same_thread": False,
-    },
-    poolclass=StaticPool,
-)
-SessionTesting = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-@pytest.fixture(name="session")
-def session_fixture():
-    Base.metadata.create_all(bind=engine)
-    db = SessionTesting()
-    try:
-        yield db
-    finally:
-        db.close()
-        Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture(name="client")
-def client_fixture(session):
-    def override_get_db():
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
-        yield client
-    app.dependency_overrides.clear()
-
-def test_create_user(client):
+def test_create_user(client, session):
     response = client.post(
         "/users/",
-        json={
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": "testpassword",
-            "role": "Passenger"
-        },
+        json={"email": "test@example.com", "password": "password123", "role": "Passenger"}
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == "testuser"
     assert data["email"] == "test@example.com"
-    assert "id" in data
-    assert "hashed_password" not in data
     assert data["role"] == "Passenger"
+    assert "id" in data
+    assert "password" not in data
+
+    # Verify user is in the database
+    user = session.query(User).filter(User.email == "test@example.com").first()
+    assert user is not None
+    assert user.email == "test@example.com"
+
+def test_create_user_invalid_role(client):
+    response = client.post(
+        "/users/",
+        json={"email": "invalid@example.com", "password": "password123", "role": "InvalidRole"}
+    )
+    assert response.status_code == 422 # Unprocessable Entity for validation error
+
+def test_read_users(client, session):
+    client.post(
+        "/users/",
+        json={"email": "test1@example.com", "password": "password123", "role": "Passenger"}
+    )
+    client.post(
+        "/users/",
+        json={"email": "test2@example.com", "password": "password123", "role": "Driver"}
+    )
+    response = client.get("/users/")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["email"] == "test1@example.com"
+    assert data[1]["email"] == "test2@example.com"

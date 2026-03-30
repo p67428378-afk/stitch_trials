@@ -1,13 +1,12 @@
 import React from 'react';
 
-const Reports = () => {
+function Reports() {
   return (
-    <div className="reports-container">
-      {/* Placeholder for Reports UI from Stitch */}
-      <h1>Reports</h1>
-      <p>This is where the Reports UI will be rendered.</p>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold">Reports</h1>
+      <p>This is the Reports component.</p>
     </div>
   );
-};
+}
 
 export default Reports;
