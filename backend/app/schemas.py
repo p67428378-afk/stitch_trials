@@ -1,84 +1,84 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import List, Optional
-from enum import Enum
-
-class UserRole(str, Enum):
-    passenger = "Passenger"
-    driver = "Driver"
-    dispatcher = "Dispatcher"
-    administrator = "Administrator"
+from typing import Optional, List
 
 class UserBase(BaseModel):
+    username: str
     email: EmailStr
-    role: UserRole # Use Enum for role validation
+    role: str = "Passenger"
 
 class UserCreate(UserBase):
     password: str
 
-class User(UserBase):
-    id: int
+class UserUpdateRole(BaseModel):
+    role: str
 
-    class Config:
-        from_attributes = True
+class User(UserBase):
+    id: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 class CabBase(BaseModel):
-    driver_id: int
     license_plate: str
-    model: str
-    status: Optional[str] = "available"
+    driver_id: Optional[str] = None
+    current_location: Optional[str] = None
+    status: str = "Available"
+    vehicle_class: Optional[str] = None
 
 class CabCreate(CabBase):
     pass
 
 class Cab(CabBase):
-    id: int
+    id: str
+    created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
-class PaymentBase(BaseModel):
-    user_id: int
-    amount: float
-    currency: Optional[str] = "USD"
-    status: Optional[str] = "pending"
+class BookingBase(BaseModel):
+    user_id: str
+    cab_id: Optional[str] = None
+    pickup_location: str
+    dropoff_location: str
+    status: str = "Pending"
+    fare: Optional[float] = None
 
-class PaymentCreate(PaymentBase):
+class BookingCreate(BookingBase):
     pass
 
-class Payment(PaymentBase):
-    id: int
-    timestamp: datetime
+class Booking(BookingBase):
+    id: str
+    created_at: datetime
+    assigned_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
+class TransactionBase(BaseModel):
+    booking_id: str
+    amount: float
+    currency: str = "GBP"
+    payment_method: Optional[str] = None
+    status: str = "Pending"
+
+class TransactionCreate(TransactionBase):
+    pass
+
+class Transaction(TransactionBase):
+    id: str
+    transaction_date: datetime
+
+    model_config = {"from_attributes": True}
 
 class ReportBase(BaseModel):
-    title: str
-    content: str
     report_type: str
+    data: str
 
 class ReportCreate(ReportBase):
     pass
 
 class Report(ReportBase):
-    id: int
+    id: str
     generated_at: datetime
 
-    class Config:
-        from_attributes = True
-
-class TrackingBase(BaseModel):
-    cab_id: int
-    latitude: float
-    longitude: float
-    timestamp: datetime
-
-class TrackingCreate(TrackingBase):
-    pass
-
-class Tracking(TrackingBase):
-    id: int
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

@@ -1,58 +1,73 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Float
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+import uuid
 
-from .database import Base # Import Base from database.py
+Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    role = Column(String, default="Passenger") # Added role field
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="Passenger") # e.g., Passenger, Driver, Dispatcher, Administrator
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    payments = relationship("Payment", back_populates="owner")
+    bookings = relationship("Booking", back_populates="user")
+    driver_cabs = relationship("Cab", back_populates="driver")
 
 class Cab(Base):
     __tablename__ = "cabs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    driver_id = Column(Integer, index=True) # Assuming driver_id links to a User
-    license_plate = Column(String, unique=True, index=True)
-    model = Column(String)
-    status = Column(String, default="available") # e.g., available, enroute, occupied
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    license_plate = Column(String, unique=True, index=True, nullable=False)
+    driver_id = Column(String, ForeignKey("users.id"), nullable=True) # Nullable if cab is unassigned
+    current_location = Column(String, nullable=True) # e.g., "lat,long"
+    status = Column(String, default="Available") # e.g., Available, On-Trip, Offline, Maintenance
+    vehicle_class = Column(String, nullable=True) # e.g., Premium Sedan, MPV 7-Seater, Electric Eco
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    tracking_entries = relationship("Tracking", back_populates="cab")
+    driver = relationship("User", back_populates="driver_cabs")
+    bookings = relationship("Booking", back_populates="cab")
 
-class Payment(Base):
-    __tablename__ = "payments"
+class Booking(Base):
+    __tablename__ = "bookings"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    amount = Column(Float)
-    currency = Column(String, default="USD")
-    status = Column(String, default="pending") # e.g., pending, completed, failed
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    cab_id = Column(String, ForeignKey("cabs.id"), nullable=True) # Nullable until assigned
+    pickup_location = Column(String, nullable=False)
+    dropoff_location = Column(String, nullable=False)
+    status = Column(String, default="Pending") # e.g., Pending, Assigned, In-Progress, Completed, Cancelled
+    fare = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    assigned_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
 
-    owner = relationship("User", back_populates="payments")
+    user = relationship("User", back_populates="bookings")
+    cab = relationship("Cab", back_populates="bookings")
+    transactions = relationship("Transaction", back_populates="booking")
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    booking_id = Column(String, ForeignKey("bookings.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="GBP")
+    payment_method = Column(String, nullable=True) # e.g., Credit Card, Mobile Wallet, In-App
+    status = Column(String, default="Pending") # e.g., Pending, Completed, Failed, Refunded
+    transaction_date = Column(DateTime, default=datetime.utcnow)
+
+    booking = relationship("Booking", back_populates="transactions")
 
 class Report(Base):
     __tablename__ = "reports"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    content = Column(String)
-    report_type = Column(String) # e.g., financial, performance, feedback
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    report_type = Column(String, nullable=False) # e.g., Daily, Weekly, Monthly, DriverPerformance
     generated_at = Column(DateTime, default=datetime.utcnow)
-
-class Tracking(Base):
-    __tablename__ = "tracking"
-
-    id = Column(Integer, primary_key=True, index=True)
-    cab_id = Column(Integer, ForeignKey("cabs.id"))
-    latitude = Column(Float)
-    longitude = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-
-    cab = relationship("Cab", back_populates="tracking_entries")
+    data = Column(String) # Store report data as JSON string for simplicity
